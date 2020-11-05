@@ -1,0 +1,512 @@
+admin29@gkn2021hotmail.onmicrosoft.com	Skcc!234	이진석
+
+
+
+===================================================================
+[로그인]
+
+https://portal.azure.com
+admin29@gkn2021hotmail.onmicrosoft.com
+Skcc!234
+
+1. 구독 > 종량제1 로 매핑 확인
+2. 리소스그룹
+   > 추가
+     - 리소스그룹 : "admin29-rsrcgroup" <--- 각자 맞게
+	 - 영역 : 한국 중부
+
+
+#az login
+admin29@gkn2021hotmail.onmicrosoft.com
+Skcc!234
+Skcc!2345
+
+
+(Azure 클러스터 생성)
+az aks create --resource-group admin29-rsrcgroup --name admin29-cluster --node-count 2 --enable-addons monitoring --generate-ssh-keys
+
+(Azure 컨테이너 레지스트리 생성)
+az acr create --resource-group admin29-rsrcgroup --name admin29 --sku Basic
+
+(Azure 컨테이너 레지스트리 로그인)
+az acr login --name admin29
+
+(Azure 클러스터(AKS)에 레지스트리(ACR) 붙이기)
+az aks update -n admin29-cluster -g admin29-rsrcgroup --attach-acr admin29
+
+(Azure 클러스터 토큰 가져오기)
+az aks get-credentials --resource-group admin29-rsrcgroup --name admin29-cluster 
+
+
+===================================================================
+(네임스페이스 만들기)
+#kubectl create ns phone82
+#kubectl get ns
+#kubectl get all -n phone82
+
+(폴더 만들기)
+#mkdir phone82
+#cd phone82
+
+===================================================================
+(기본 환경 설정)
+httpie
+kafka
+siege
+
+===================================================================
+
+
+
+
+
+
+===================================================================
+[6]Deploy/ Pipeline
+
+
+--------------------------------------------------
+(app 배포)
+cd ~/phone82
+rm -rf app
+git clone https://github.com/jion-lee/app.git
+cd app
+mvn package -Dmaven.test.skip=true
+az acr build --registry admin29 --image admin29.azurecr.io/app:latest .
+
+kubectl delete deploy app -n phone82
+(x)kubectl create deploy app --image=admin29.azurecr.io/app:latest -n phone82
+kubectl apply -f kubernetes/deployment.yml
+
+
+--------------------------------------------------
+(pay 배포)
+cd ~/phone82
+rm -rf pay
+git clone https://github.com/jion-lee/pay.git
+cd pay
+mvn package -Dmaven.test.skip=true
+az acr build --registry admin29 --image admin29.azurecr.io/pay:latest .
+
+kubectl delete deploy pay -n phone82
+(x)kubectl create deploy pay --image=admin29.azurecr.io/pay:latest -n phone82
+kubectl apply -f kubernetes/deployment.yml
+
+
+
+
+--------------------------------------------------
+(store 배포)
+cd ~/phone82
+rm -rf store
+git clone https://github.com/jion-lee/store.git
+cd store
+mvn package -Dmaven.test.skip=true
+az acr build --registry admin29 --image admin29.azurecr.io/store:latest .
+
+kubectl delete deploy store -n phone82
+(x)kubectl create deploy store --image=admin29.azurecr.io/store:latest -n phone82
+kubectl apply -f kubernetes/deployment.yml
+
+
+
+--------------------------------------------------
+(gift 배포)
+cd ~/phone82
+rm -rf gift
+git clone https://github.com/jion-lee/gift.git
+cd gift
+mvn package -Dmaven.test.skip=true
+az acr build --registry admin29 --image admin29.azurecr.io/gift:latest .
+
+kubectl delete deploy gift -n phone82
+(x)kubectl create deploy gift --image=admin29.azurecr.io/gift:latest -n phone82
+kubectl apply -f kubernetes/deployment.yml
+
+
+
+
+kubectl get all -n phone82
+kubectl logs pod/gift-c4fdc96b4-sbshn  -f -n phone82
+kubectl logs pod/pay-77588b74c9-h9nbr  -f -n phone82
+
+
+
+http POST http://app:8080/orders item=a3 qty=4
+http http://app:8080/orders/8
+http http://gift:8080/gifts
+http http://gift:8080/gifts/4
+
+
+http PATCH http://app:8080/orders/8 orderId=8 status=cancel
+http http://app:8080/orders/8
+http http://gift:8080/gifts
+http http://gift:8080/gifts/4
+
+
+
+
+
+
+--------------------------------------------------
+(customer 배포)
+cd ~/phone82
+rm -rf customer
+git clone https://github.com/jion-lee/customer.git
+cd customer
+mvn package -Dmaven.test.skip=true
+az acr build --registry admin29 --image admin29.azurecr.io/customer:latest .
+
+kubectl delete deploy customer -n phone82
+(x)kubectl create deploy customer --image=admin29.azurecr.io/customer:latest -n phone82
+kubectl apply -f kubernetes/deployment.yml
+
+
+
+--------------------------------------------------
+(gateway 배포)
+cd ~/phone82
+rm -rf gateway
+git clone https://github.com/jion-lee/gateway.git
+cd gateway
+mvn package -Dmaven.test.skip=true
+az acr build --registry admin29 --image admin29.azurecr.io/gateway:latest .
+
+kubectl delete deploy gateway -n phone82
+kubectl create deploy gateway --image=admin29.azurecr.io/gateway:latest -n phone82
+
+
+
+(서비스 생성)
+kubectl expose deploy app --type="ClusterIP" --port=8080 -n phone82
+kubectl expose deploy pay --type="ClusterIP" --port=8080 -n phone82
+kubectl expose deploy store --type="ClusterIP" --port=8080 -n phone82
+kubectl expose deploy gift --type="ClusterIP" --port=8080 -n phone82
+kubectl expose deploy customer --type="ClusterIP" --port=8080 -n phone82
+kubectl expose deploy gateway --type="ClusterIP" --port=8080 -n phone82
+
+
+git clone https://github.com/jion-lee/app.git
+git clone https://github.com/jion-lee/pay.git
+git clone https://github.com/jion-lee/store.git
+git clone https://github.com/jion-lee/customer.git
+git clone https://github.com/jion-lee/gift.git
+git clone https://github.com/jion-lee/gateway.git
+
+
+
+
+
+
+
+kubectl logs pod/gift-c4fdc96b4-mwtrn -f -n phone82
+
+
+(4) (configMap 생성)
+kubectl create configmap apiurl --from-literal=url=http://pay:8080 --from-literal=url_gift=http://gift:8080   --from-literal=fluentd-server-ip=10.xxx.xxx.xxx -n phone82
+
+
+
+
+
+
+
+
+
+
+
+
+
+==================================================================================
+[5]Gateway
+Gateway > application.yml 소스 확인
+
+
+#kubectl get all -n phone82
+>>>> service/gateway   ClusterIP   10.0.122.155   (IP확인)
+
+(httpie 실행)
+#kubectl exec -it httpie bin/bash -n phone82
+
+>>#http GET http://10.0.122.155:8080/orders
+>>#http GET http://10.0.122.155:8080/payments
+>>#http GET http://10.0.122.155:8080/storeManages
+>>#http GET http://10.0.122.155:8080/customer
+>>#exti  (나가지)
+
+
+
+http://gateway:8080/payments
+
+http POST http://app:8080/orders item=abc123 qty=3
+
+
+
+http http://gift:8080/gifts
+
+
+
+-----------------------------------------------------------
+(kafka 실행)
+#kubectl -n kafka exec my-kafka-0 -- /usr/bin/kafka-topics --zookeeper my-kafka-zookeeper:2181 --topic phoneseller --create --partitions 1 --replication-factor 1
+
+(목록확인)
+#kubectl -n kafka exec my-kafka-0 -- /usr/bin/kafka-topics --zookeeper my-kafka-zookeeper:2181 --list
+
+(모니터링)
+#kubectl -n kafka exec -ti my-kafka-0 -- /usr/bin/kafka-console-consumer --bootstrap-server my-kafka:9092 --topic phoneseller --from-beginning
+
+
+
+kubectl exec -it pod/gateway-5956b9dd7b-jpk52 -n phone82 -- /bin/bash   
+
+
+==================================================================================
+[7]Circuit Breaker
+application.yml
+
+hystrix:
+  command:
+    # 전역설정
+    default:
+      execution.isolation.thread.timeoutInMilliseconds: 610
+
+
+(Payment) Payment.java (Entity)
+
+    @PrePersist
+    public void onPrePersist(){  //결제이력을 저장한 후 적당한 시간 끌기
+
+        ...
+        
+        try {
+                Thread.currentThread().sleep((long) (400 + Math.random() * 220));
+                System.out.println("=============결재 승인 완료=============");
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+    }
+	
+(siege가 create 되어 있지 않으면)
+#kubectl run siege --image=apexacme/siege-nginx -n phone82 
+
+(siege 들어가기)
+#kubectl exec -it pod/siege-5c7c46b788-2xcnc -c siege -n phone82 -- /bin/bash
+
+#siege -c100 -t60S -r10 --content-type "application/json" 'http://app:8080/orders POST {"item": "abc123", "qty":3}'
+
+
+siege -c100 -t60S -r10 --content-type "application/json" 'http://10.0.200.168:8080/orders POST {"item": "chicken"}'
+
+==================================================================================
+[8]Autoscale (HPA)
+
+kubectl get all -n phone82
+kubectl delete deploy,service,pod app -n phone82
+
+cd store
+kubectl apply -f kubernetes/deployment.yaml
+
+(설정 확인 필요시)
+kubectl get deply store -o yaml
+
+
+(deployment.yaml) ==> 캡쳐
+resources:
+	limits:
+	  cpu: 500m
+	requests:
+	  cpu: 200m
+
+
+(기존에 있는 경우 필요시, hpa 서비스 삭제)
+kubectl get all -n phone82
+kubectl delete horizontalpodautoscaler.autoscaling/app  -n phone82
+
+
+(autoscale 적용)
+kubectl autoscale deploy store --min=1 --max=10 --cpu-percent=15 -n phone82
+
+
+(별도 터미널에서 모니터링 )
+kubectl get deploy store -w -n phone82
+==> 캡쳐
+
+
+(siege가 create 되어 있지 않으면)
+kubectl run siege --image=apexacme/siege-nginx -n phone82 
+
+
+(siege 들어가기)
+kubectl get all -n phone82
+kubectl exec -it pod/siege-5c7c46b788-4rn4r -c siege -n phone82 -- /bin/bash
+
+
+(부하주기)
+siege -c10 -t120S -r10 -v --content-type "application/json" 'http://store:8080/storeManages POST {"orderId":"456", "process":"Payed"}'
+==> 캡쳐
+
+
+==================================================================================
+[9]Zero-downtime deploy (Readiness Probe)
+
+kubectl get all -n phone82
+kubectl delete deploy store -n phone82       
+kubectl apply -f kubernetes/deployment.yml   <== rediness 설정이 있는 파일
+kubectl apply -f kubernetes/deployment_b.yml <== rediness 설정이 없는 파일
+==> 위 설정으로 아래 각각 실행
+
+
+(siege가 create 되어 있지 않으면)
+kubectl run siege --image=apexacme/siege-nginx -n phone82 
+
+(siege 들어가기)
+kubectl get all -n phone82
+kubectl exec -it pod/siege-5c7c46b788-4rn4r -c siege -n phone82 -- /bin/bash
+
+
+(부하주기)
+siege -c100 -t100S -v --content-type "application/json" 'http://store:8080/storeManages'
+==> 결과 캡쳐
+  - rediness 있는 경우 : 100%
+  - 없는경우 : 100% 미만...
+
+
+(사전에 다른 버전으로 acr에 이미지 push 필요> 위 배포과정 참조)
+cd acr
+az acr build --registry admin02 --image admin02.azurecr.io/store:v4 .
+
+(별도 터미널에서 이미지만 변경 배포)
+kubectl set image deploy store store=admin02.azurecr.io/store:v4 -n phone82
+
+
+
+
+
+
+==================================================================================
+[10]Config Map/ Persistence Volume]
+
+(1)소스 내 <===(캡쳐)
+
+(2)app > application.yml  <===(캡쳐)
+
+-default쪽에
+api:
+  url:
+    payment: http://localhost:8082
+
+-docker 쪽에
+api:
+  url:
+    payment: http://pay:8080
+	
+(3)Deployment.yml <===(캡쳐)
+
+
+	
+(4) (configMap 생성)
+kubectl create configmap apiurl --from-literal=url=http://pay:8080 --from-literal=fluentd-server-ip=10.xxx.xxx.xxx -n phone82
+
+-------------------------------------
+(테스트)
+(httpie 실행)
+kubectl exec -it httpie bin/bash -n phone82
+
+http POST http://app:8080/orders item=dfdf qty=2
+===> 201 성공
+
+(configmap 삭제)
+kubectl delete configmap apiurl -n phone82
+
+
+
+(store 서비스 재시작)
+kubectl get pod/app-56f677d458-fbgf5 -n phone82 -o yaml | kubectl replace --force -f-
+(httpie 실행)
+kubectl exec -it httpie bin/bash -n phone82
+
+http POST http://app:8080/orders item=dfdf qty=2
+===> 500 실패
+
+kubectl get all -n phone82  <== (캡쳐)
+kubectl describe pod/store...... -n phone82 <== 캡쳐
+
+
+
+
+
+(참고 > 로그 확인)
+kubectl logs pod/app-56f677d458-tqrzh -f -n phone82
+
+(참고 > configmap 설정 확인)
+kubectl get configmap apiurl -o yaml -n phone82
+
+(참고 > configmap 삭제)
+kubectl delete configmap apiurl -n phone82
+
+(참고 > pod 재시작)
+kubectl get pod/app-56f677d458-tqrzh -n phone82 -o yaml | kubectl replace --force -f-
+kubectl get pod <pod_name> -n <namespace> -o yaml | kubectl replace --force -f-
+
+
+
+
+
+==================================================================================
+[11]Polyglot
+# store hsql로 확인
+
+cd ~/phone82/store
+cat pom.xml   ===> (캡쳐)
+
+<!--<dependency>
+	<groupId>com.h2database</groupId>
+	<artifactId>h2</artifactId>
+	<scope>runtime</scope>
+</dependency>-->
+<dependency>
+	<groupId>org.hsqldb</groupId>
+	<artifactId>hsqldb</artifactId>
+	<scope>runtime</scope>
+</dependency>
+
+
+(필요시)
+http
+
+
+==================================================================================
+[12]Self-healing (Liveness Probe)
+
+cd ~/phone82/store/kubernetes
+vi deployment.yml
+
+(아래 설정 변경)
+livenessProbe:
+	tcpSocket:
+	  port: 8081
+	initialDelaySeconds: 5
+	periodSeconds: 5
+
+(배포)
+kubectl delete deploy store -n phone82
+cd store
+kubectl apply -f kubernetes/deployment.yml -n phone82
+kubectl get all -n phone82
+
+(상태확인)
+kubectl describe deploy store -n phone82
+==> (캡쳐)
+
+
+
+
+
+
+
+
+
+
+
+
