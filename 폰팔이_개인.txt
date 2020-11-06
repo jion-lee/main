@@ -1,6 +1,18 @@
 admin29@gkn2021hotmail.onmicrosoft.com	Skcc!234	이진석
 
- eunjeeheo
+Saga
+CQRS
+Correlation
+Req/Resp
+Gateway
+Deploy/ Pipeline
+Circuit Breaker
+Autoscale (HPA)
+Zero-downtime deploy (Readiness Probe)
+Config Map/ Persistence Volume
+Polyglot
+Self-healing (Liveness Probe)
+
 
 ===================================================================
 [로그인]
@@ -124,30 +136,6 @@ kubectl delete deploy gift -n phone82
 kubectl apply -f kubernetes/deployment.yml
 
 
-
-
-kubectl get all -n phone82
-kubectl logs pod/gift-c4fdc96b4-sbshn  -f -n phone82
-kubectl logs pod/pay-77588b74c9-h9nbr  -f -n phone82
-
-
-
-http POST http://app:8080/orders item=a3 qty=4
-http http://app:8080/orders/8
-http http://gift:8080/gifts
-http http://gift:8080/gifts/4
-
-
-http PATCH http://app:8080/orders/8 orderId=8 status=cancel
-http http://app:8080/orders/8
-http http://gift:8080/gifts
-http http://gift:8080/gifts/4
-
-
-
-
-
-
 --------------------------------------------------
 (customer 배포)
 cd ~/phone82
@@ -198,6 +186,27 @@ git clone https://github.com/jion-lee/gateway.git
 
 
 
+==================================================================================
+[기능 테스트]
+kubectl get all -n phone82
+kubectl logs pod/gift-c4fdc96b4-sbshn  -f -n phone82
+kubectl logs pod/pay-77588b74c9-ptfdd  -f -n phone82
+kubectl logs pod/app-797b8fdbb5-7zf62  -f -n phone82
+
+
+http POST http://app:8080/orders item=note10 qty=1 price=100000
+http http://app:8080/orders/18
+http http://gift:8080/gifts
+http http://gift:8080/gifts/9
+
+
+http PATCH http://app:8080/orders/8 status=cancel
+http http://app:8080/orders/8
+http http://gift:8080/gifts
+http http://gift:8080/gifts/9
+
+http http://customer:8080/customers
+
 
 kubectl logs pod/gift-c4fdc96b4-mwtrn -f -n phone82
 
@@ -208,10 +217,14 @@ kubectl create configmap apiurl --from-literal=url=http://pay:8080 --from-litera
 
 
 
+#kubectl exec -it httpie bin/bash -n phone82
+http POST http://pay:8080/payments orderId=11 process=Ordered
 
+(미리생성후)
+http POST http://pay:8080/payments orderId=12 process=Ordered
+(id 확인필요)
 
-
-
+http PATCH http://pay:8080/payments/2 orderId=12 process=OrderCancellederCancelled
 
 
 
@@ -242,7 +255,7 @@ http POST http://app:8080/orders item=abc123 qty=3
 
 
 
-http http://gift:8080/gifts
+http PATCH http://pay:8080/payments/2 orderId=2 process=cancel
 
 
 
@@ -263,6 +276,31 @@ kubectl exec -it pod/gateway-5956b9dd7b-jpk52 -n phone82 -- /bin/bash
 
 ==================================================================================
 [7]Circuit Breaker
+
+application.yml 설정하기
+
+
+
+mvn package -Dmaven.test.skip=true
+az acr build --registry admin29 --image admin29.azurecr.io/pay:v3 .
+
+(별도 터미널에서 이미지만 변경 배포)
+kubectl set image deploy pay pay=admin29.azurecr.io/pay:v3 -n phone82
+
+
+
+
+siege -c100 -t60S -v --content-type "application/json" 'http://pay:8080/payments/2 PATCH {"orderId":2, "process": "OrderCancelled"}'
+
+
+
+
+
+
+
+
+
+
 application.yml
 
 hystrix:
@@ -325,11 +363,11 @@ kubectl delete horizontalpodautoscaler.autoscaling/app  -n phone82
 
 
 (autoscale 적용)
-kubectl autoscale deploy store --min=1 --max=10 --cpu-percent=15 -n phone82
+kubectl autoscale deploy gift --min=1 --max=10 --cpu-percent=15 -n phone82
 
 
 (별도 터미널에서 모니터링 )
-kubectl get deploy store -w -n phone82
+kubectl get deploy gift -w -n phone82
 ==> 캡쳐
 
 
@@ -339,21 +377,28 @@ kubectl run siege --image=apexacme/siege-nginx -n phone82
 
 (siege 들어가기)
 kubectl get all -n phone82
-kubectl exec -it pod/siege-5c7c46b788-4rn4r -c siege -n phone82 -- /bin/bash
+kubectl exec -it pod/siege-5c7c46b788-f8j6n -c siege -n phone82 -- /bin/bash
 
 
 (부하주기)
-siege -c10 -t120S -r10 -v --content-type "application/json" 'http://store:8080/storeManages POST {"orderId":"456", "process":"Payed"}'
+siege -c10 -t120S -r10 -v --content-type "application/json" 'http://gift:8080/gifts PATCH {"orderId":"10", "process":"Payed"}'
 ==> 캡쳐
+
+siege -c10 -t120S -r10 -v --content-type "application/json" 'http://gift:8080/gifts'
+
+
+siege -c100 -t60S -v --content-type "application/json" 'http://pay:8080/payments PATCH {"orderId":2, "status": "cancel"}'
+
+
 
 
 ==================================================================================
 [9]Zero-downtime deploy (Readiness Probe)
 
 kubectl get all -n phone82
-kubectl delete deploy store -n phone82       
+kubectl delete deploy gift -n phone82       
 kubectl apply -f kubernetes/deployment.yml   <== rediness 설정이 있는 파일
-kubectl apply -f kubernetes/deployment_b.yml <== rediness 설정이 없는 파일
+kubectl apply -f kubernetes/deployment_readiness.yml <== rediness 설정이 없는 파일
 ==> 위 설정으로 아래 각각 실행
 
 
@@ -366,7 +411,7 @@ kubectl exec -it pod/siege-5c7c46b788-4rn4r -c siege -n phone82 -- /bin/bash
 
 
 (부하주기)
-siege -c100 -t100S -v --content-type "application/json" 'http://store:8080/storeManages'
+siege -c100 -t100S -v --content-type "application/json" 'http://gift:8080/gifts'
 ==> 결과 캡쳐
   - rediness 있는 경우 : 100%
   - 없는경우 : 100% 미만...
@@ -377,7 +422,7 @@ cd acr
 az acr build --registry admin02 --image admin02.azurecr.io/store:v4 .
 
 (별도 터미널에서 이미지만 변경 배포)
-kubectl set image deploy store store=admin02.azurecr.io/store:v4 -n phone82
+kubectl set image deploy gift gift=admin29.azurecr.io/gift:v2 -n phone82
 
 
 
@@ -493,6 +538,7 @@ livenessProbe:
 kubectl delete deploy store -n phone82
 cd store
 kubectl apply -f kubernetes/deployment.yml -n phone82
+kubectl apply -f kubernetes/deployment_liveness.yml -n phone82
 kubectl get all -n phone82
 
 (상태확인)
